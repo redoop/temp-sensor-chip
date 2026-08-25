@@ -1,3 +1,5 @@
+**[中文](README.md) | English**
+
 # Temperature Sensor Chip (温度传感器芯片) — TS130
 
 A smart temperature sensor chip developed with the **IIC-OSIC-TOOLS container**

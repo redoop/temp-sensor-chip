@@ -1,3 +1,5 @@
+**[English](README_EN.md) | 中文**
+
 # 温度传感器芯片 (Temperature Sensor Chip) — TS130
 
 基于 **IIC-OSIC-TOOLS 容器**（服务器 192.168.100.102）与 **SkyWater 130nm (sky130A)** PDK
