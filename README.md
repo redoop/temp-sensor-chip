@@ -1,113 +1,129 @@
-**[English](README_EN.md) | 中文**
+**[中文](README_CN.md) | English**
 
-# 温度传感器芯片 (Temperature Sensor Chip) — TS130
+# Temperature Sensor Chip (温度传感器芯片) — TS130
 
-基于 **IIC-OSIC-TOOLS 容器**（服务器 192.168.100.102）与 **SkyWater 130nm (sky130A)** PDK
-开发的一款智能温度传感器芯片：模拟前端（PTAT + 温度-频率转换）+ 数字核心（I2C 接口 + 校准），
-完整走通 ngspice 模拟验证、Verilog 数字仿真、Yosys 综合与 magic 版图流程。
+A smart temperature sensor chip developed with the **IIC-OSIC-TOOLS container**
+(server 192.168.100.102) and the **SkyWater 130nm (sky130A)** PDK: an analog
+front-end (PTAT + temperature-to-frequency converter) plus a digital core
+(I2C interface + calibration), covering a complete flow through ngspice analog
+verification, Verilog digital simulation, Yosys synthesis and magic layout.
 
-## 亮点
+## Highlights
 
-- **真正的 PTAT 电流源**（Banba OTA 强制型）：OTA 强制两分支电压相等，电流精确等于
-  ΔVbe/R1 ∝ T，-40~125 ℃ 实测线性度 <5%（0.473→0.850 µA vs 理想 0.473→0.808 µA）
-- **发现并解决关键 PDK 坑**：sky130 PNP 子电路**忽略 `mult` 参数**——面积比必须用
-  不同尺寸器件（W3p40 vs W0p68）实现，否则 ΔVbe=0、PTAT 完全失效
-- **I2C 从机接口**（LM75 风格）：地址 0x48、寄存器指针自动递增、多字节读、NACK 处理，
-  6 项协议测试全部通过
-- **两点校准**：温度输出 9-bit / 0.5 ℃ 分辨率，校准常数由 ngspice 表征自动生成
-- **完整工具链**：ngspice 全角点扫描 → iverilog 数字仿真 → Yosys sky130 综合
-  （561 单元 / 5558 µm²）→ magic sky130A 版图（PDK 器件几何 + DRC + GDS 导出）
+- **True PTAT current source** (Banba OTA-forced topology): the OTA forces the two
+  branches to equal voltage, giving exactly `I = ΔVbe/R1 ∝ T`. Measured across
+  -40~125 °C, linearity is <5% (0.473→0.850 µA vs. ideal 0.473→0.808 µA).
+- **Found and worked around a key PDK trap**: sky130 PNP subcircuits **ignore the
+  `mult` parameter** — the area ratio must be realized with two differently sized
+  devices (W3p40 vs W0p68), otherwise ΔVbe = 0 and the PTAT completely fails.
+- **I2C slave interface** (LM75-style): address 0x48, auto-incrementing register
+  pointer, multi-byte read, NACK handling — all 6 protocol tests pass.
+- **Two-point calibration**: 9-bit / 0.5 °C temperature output; calibration
+  constants are auto-generated from ngspice characterization.
+- **Full toolchain**: ngspice all-corner sweep → iverilog digital simulation →
+  Yosys sky130 synthesis (561 cells / 5558 µm²) → magic sky130A layout
+  (PDK device geometry + DRC + GDS export).
 
-## 目录结构
+## Directory Layout
 
 ```
 temp-sensor-chip/
 ├── analog/
-│   ├── spice/            # PTAT(T2F) 网表: ptat/csro/t2f + 测试平台
-│   └── sim/              # ngspice 结果: results_{tt,ss,ff}.csv, freq_vs_temp.png
+│   ├── spice/            # PTAT(T2F) netlists: ptat/csro/t2f + testbenches
+│   └── sim/              # ngspice results: results_{tt,ss,ff}.csv, freq_vs_temp.png
 ├── rtl/
-│   ├── i2c_slave.v       # I2C 从机（地址 0x48, 400kHz）
-│   ├── temp_engine.v     # T2F 门控计数 + 两点校准 → 9-bit 温度
-│   ├── temp_regs.v       # 寄存器文件（配置/Thyst/TOS/温度）
-│   └── temp_sensor_top.v # 芯片顶层（含 os_int 过温告警）
+│   ├── i2c_slave.v       # I2C slave (address 0x48, 400 kHz)
+│   ├── temp_engine.v     # T2F gated counter + two-point calibration → 9-bit temp
+│   ├── temp_regs.v       # register file (config/Thyst/TOS/temperature)
+│   └── temp_sensor_top.v # chip top (incl. os_int over-temperature alarm)
 ├── tb/
-│   ├── i2c_master_model.v # I2C 主设备位级模型
-│   ├── t2f_model.v        # 模拟前端行为模型（f(T) 来自 ngspice 数据）
-│   ├── tb_i2c.v           # I2C 协议测试（6 项 PASS）
-│   ├── tb_top.v           # 全芯片测试（温度读回精度）
-│   └── t2f_model_params.vh # 自动生成的校准参数
+│   ├── i2c_master_model.v # bit-level I2C master model
+│   ├── t2f_model.v        # analog front-end behavioral model (f(T) from ngspice data)
+│   ├── tb_i2c.v           # I2C protocol tests (6 PASS)
+│   ├── tb_top.v           # full-chip test (temperature read-back accuracy)
+│   └── t2f_model_params.vh # auto-generated calibration parameters
 ├── scripts/
-│   ├── run_analog.py      # ngspice 温度/角点扫描驱动 + 拟合
-│   ├── gen_t2f_model.py   # 生成校准常数 + t2f 行为模型参数
-│   └── run_in_container.sh # IIC-OSIC-TOOLS 容器运行器
-├── syn/                   # Yosys 综合（run_synth.sh, out/）
-├── layout/                # magic 版图（ptat_cell.mag/.gds, DRC 报告）
-├── docs/architecture.md   # 架构设计文档
+│   ├── run_analog.py      # ngspice temperature/corner sweep driver + fit
+│   ├── gen_t2f_model.py   # generate calibration constants + t2f behavioral model params
+│   └── run_in_container.sh # IIC-OSIC-TOOLS container runner
+├── syn/                   # Yosys synthesis (run_synth.sh, out/)
+├── layout/                # magic layout (ptat_cell.mag/.gds, DRC report)
+├── docs/architecture.md   # architecture design document
 └── Makefile               # sim-analog / sim-rtl / model / synth
 ```
 
-## 快速开始（在服务器上）
+## Getting Started (on the server)
 
 ```bash
-# 模拟前端全角点扫描（ngspice，容器内）
+# Analog front-end all-corner sweep (ngspice, in container)
 ./scripts/run_in_container.sh "make sim-analog"
 
-# 生成校准模型参数（由 analog/sim/results_tt.csv 驱动）
+# Generate calibration model params (driven by analog/sim/results_tt.csv)
 ./scripts/run_in_container.sh "make model"
 
-# 数字 RTL 仿真（iverilog）
-make sim-rtl          # 本机（OSS CAD Suite）或容器内均可
+# Digital RTL simulation (iverilog)
+make sim-rtl          # locally (OSS CAD Suite) or in the container
 
-# 综合（yosys → sky130_fd_sc_hd）
+# Synthesis (yosys → sky130_fd_sc_hd)
 ./scripts/run_in_container.sh "make synth"
 
-# magic 版图 + DRC + GDS
+# magic layout + DRC + GDS
 ./scripts/run_in_container.sh "cd layout && magic -noconsole -dnull \
   -rcfile /foss/pdks/sky130A/libs.tech/magic/sky130A.tcl ptat_cell.tcl"
 ```
 
-## 验证结果摘要
+## Verification Summary
 
-### 模拟前端（ngspice, sky130A）
-| 温度 | tt 频率 | ss 频率 | ff 频率 | Iptat(tt) |
+### Analog front-end (ngspice, sky130A)
+| Temp | tt freq | ss freq | ff freq | Iptat(tt) |
 |---|---|---|---|---|
-| -40 ℃ | 507 kHz | 535 kHz | 467 kHz | 0.473 µA |
-| -20 ℃ | 546 kHz | 580 kHz | 502 kHz | 0.520 µA |
-| 0 ℃ | 580 kHz | 617 kHz | 534 kHz | 0.565 µA |
-| 20 ℃ | 612 kHz | 653 kHz | 565 kHz | 0.610 µA |
-| 27 ℃ | 623 kHz | 664 kHz | 576 kHz | 0.625 µA |
-| 40 ℃ | 642 kHz | 684 kHz | 594 kHz | 0.654 µA |
-| 60 ℃ | 672 kHz | 716 kHz | 621 kHz | 0.698 µA |
-| 80 ℃ | 700 kHz | 748 kHz | 647 kHz | 0.743 µA |
-| 100 ℃ | 729 kHz | 777 kHz | 673 kHz | 0.789 µA |
-| 125 ℃ | 765 kHz | 815 kHz | 702 kHz | 0.850 µA |
+| -40 °C | 507 kHz | 535 kHz | 467 kHz | 0.473 µA |
+| -20 °C | 546 kHz | 580 kHz | 502 kHz | 0.520 µA |
+| 0 °C | 580 kHz | 617 kHz | 534 kHz | 0.565 µA |
+| 20 °C | 612 kHz | 653 kHz | 565 kHz | 0.610 µA |
+| 27 °C | 623 kHz | 664 kHz | 576 kHz | 0.625 µA |
+| 40 °C | 642 kHz | 684 kHz | 594 kHz | 0.654 µA |
+| 60 °C | 672 kHz | 716 kHz | 621 kHz | 0.698 µA |
+| 80 °C | 700 kHz | 748 kHz | 647 kHz | 0.743 µA |
+| 100 °C | 729 kHz | 777 kHz | 673 kHz | 0.789 µA |
+| 125 °C | 765 kHz | 815 kHz | 702 kHz | 0.850 µA |
 
-**测试配图：**
+**Test plots:**
 
-![T2F 温度-频率特性（tt/ss/ff 三角点，ngspice 仿真）](analog/sim/freq_vs_temp.png)
+![T2F temperature-frequency characteristic (tt/ss/ff corners, ngspice)](analog/sim/freq_vs_temp.png)
 
-![PTAT 电流-温度线性度验证（含理想 PTAT 参考线）](analog/sim/ptat_i_vs_temp.png)
+![PTAT current-linearity verification (with ideal PTAT reference)](analog/sim/ptat_i_vs_temp.png)
 
-完整数据见 `analog/sim/results_*.csv` 与 `analog/sim/ptat_results.csv`。
+Full data is in `analog/sim/results_*.csv` and `analog/sim/ptat_results.csv`.
 
-### 数字（iverilog）
-- `tb_i2c`：写配置/读回、Thyst/TOS 读写、错误地址 NACK、温度寄存器——**6/6 PASS**
-- `tb_top`：T=25/-40/125/0 ℃ 全芯片温度读回（使用 ngspice 校准参数）
+### Digital (iverilog)
+- `tb_i2c`: write config/read back, Thyst/TOS read-write, wrong-address NACK,
+  temperature register — **6/6 PASS**
+- `tb_top`: full-chip temperature read-back at T=25/-40/125/0 °C
+  (using ngspice calibration parameters)
 
-### 综合（Yosys）
-- sky130_fd_sc_hd，`temp_sensor_top` 合计 **561 单元 / 5558 µm²**（`syn/out/temp_sensor_top_synth.v`）
+### Synthesis (Yosys)
+- sky130_fd_sc_hd, `temp_sensor_top` totals **561 cells / 5558 µm²**
+  (`syn/out/temp_sensor_top_synth.v`)
 
-### 版图（magic）
-- `layout/ptat_cell.mag`：双 PNP（PDK 器件几何）+ p+ poly 电阻 + 金属布线
-- DRC：8 项违规（手工组装版图，间距类规则），`ptat_cell.gds` 已导出
+### Layout (magic)
+- `layout/ptat_cell.mag`: dual PNP (PDK device geometry) + p+ poly resistor +
+  metal routing
+- DRC: 8 spacing-type violations (hand-assembled layout); `ptat_cell.gds` exported
 
-![PTAT 模拟单元版图（magic → GDS 渲染，sky130A）](layout/ptat_cell.png)
+![PTAT analog cell layout (magic → GDS render, sky130A)](layout/ptat_cell.png)
 
-## 关键设计要点
+## Key Design Points
 
-1. **PTAT**：Banba OTA 拓扑，`I = VT·ln(N)/R1`，N≈10（W3p40/W0p68 面积比），R1=100kΩ。
-2. **T2F**：5 级电流饥饿环形振荡器，f ∝ Iptat，10ms 门控计数 → ~6000 计数 @27 ℃。
-3. **校准**：`temp = ((raw-C0)·GAIN)>>8 + T0`，C0/C1 为 -40/125 ℃ 标定计数。
-4. **I2C**：开漏 SDA、3 拍滑动滤波、字节状态机、NACK 后停止传输。
+1. **PTAT**: Banba OTA topology, `I = VT·ln(N)/R1`, N≈10 (W3p40/W0p68 area ratio),
+   R1=100 kΩ.
+2. **T2F**: 5-stage current-starved ring oscillator, f ∝ Iptat, 10 ms gated counting
+   → ~6000 counts @27 °C.
+3. **Calibration**: `temp = ((raw-C0)·GAIN)>>8 + T0`, C0/C1 are the -40/125 °C
+   calibration counts.
+4. **I2C**: open-drain SDA, 3-tap glitch filter, byte state machine, stop on NACK.
 
-详见 [docs/architecture.md](docs/architecture.md)。
+See [docs/architecture.md](docs/architecture.md) for details.
+
+## Licensing
+RTL and scripts: Apache-2.0.
