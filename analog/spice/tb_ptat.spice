@@ -1,0 +1,34 @@
+* =====================================================================
+* PTAT DC testbench -- generated per (temp, corner) by run_analog.py
+* Measures Iptat and the mirror gate voltage at the given temperature.
+*
+* Model include pattern follows the official IIC-OSIC-TOOLS sky130A
+* testbenches (see _tests/06 in the iic-osic-tools repo).
+* NOTE: with the PDK's ".option scale=1.0u", device W/L must be given
+* as bare numbers in micron (e.g. W=6 L=1), NOT with a "u" suffix.
+* =====================================================================
+.param tsim = {{TSIM}}
+.param MC_MM_SWITCH = 0
+.param MC_PR_SWITCH = 0
+.temp {tsim}
+
+* --- PDK models + corner ---
+.include "{{PDK_NGSPICE}}/corners/{{CORNER}}.spice"
+.include "{{PDK_NGSPICE}}/r+c/res_typical__cap_typical.spice"
+.include "{{PDK_NGSPICE}}/r+c/res_typical__cap_typical__lin.spice"
+.include "{{PDK_NGSPICE}}/corners/{{CORNER}}/specialized_cells.spice"
+
+* --- design sources ---
+.include "ptat.spice"
+
+* --- circuit ---
+VDD vdd 0 1.8
+VMEAS iout 0 0
+XU vdd 0 iout gmir pa pn1 ptat
+
+* --- analysis: 2-point DC sweep, temp set by .temp ---
+.dc VDD 1.8 1.9 0.1
+.meas dc iptat find i(vmeas) at=1.8
+.probe v(xu.gmir)
+.meas dc vgmir find v(xu.gmir) at=1.8
+.end

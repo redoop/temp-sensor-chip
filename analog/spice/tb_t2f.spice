@@ -1,0 +1,39 @@
+* =====================================================================
+* T2F transient testbench -- generated per (temp, corner) by run_analog.py
+* Runs the full analog front-end and measures the oscillation frequency
+* (average over 100 cycles after settling).
+*
+* Model include pattern follows the official IIC-OSIC-TOOLS sky130A
+* testbenches. W/L in bare micron numbers (scale=1.0u in PDK).
+* =====================================================================
+.param tsim = {{TSIM}}
+.param MC_MM_SWITCH = 0
+.param MC_PR_SWITCH = 0
+.temp {tsim}
+
+* --- PDK models + corner ---
+.include "{{PDK_NGSPICE}}/corners/{{CORNER}}.spice"
+.include "{{PDK_NGSPICE}}/r+c/res_typical__cap_typical.spice"
+.include "{{PDK_NGSPICE}}/r+c/res_typical__cap_typical__lin.spice"
+.include "{{PDK_NGSPICE}}/corners/{{CORNER}}/specialized_cells.spice"
+
+* --- design sources ---
+.include "ptat.spice"
+.include "csro.spice"
+.include "t2f.spice"
+
+* --- supplies: VDD ramps to 1.8 V in 10 us (helps start-up) ---
+VDD vdd 0 PULSE(0 1.8 0 10u 10u 1 2)
+VSS vss 0 0
+
+* --- front-end ---
+XU vdd vss fout t2f
+
+* --- transient: settle 0.5 ms, then average 100 cycles ---
+.tran 20n 2m uic
+
+.meas tran t1 when v(fout)=0.9 rise=20
+.meas tran t2 when v(fout)=0.9 rise=120
+.meas tran period param='(t2-t1)/100'
+.meas tran freq param='1/period'
+.end

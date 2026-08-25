@@ -1,0 +1,74 @@
+* =====================================================================
+* Current-starved ring oscillator (CSRO) -- temperature-to-frequency
+* converter core.  Each inverter stage is a series stack:
+*
+*     VDD -- [PMOS current source: gate=gp_bias] -- va
+*         -- [PMOS switch: gate=in] -- out
+*         -- [NMOS switch: gate=in] -- vb
+*         -- [NMOS current sink: gate=gn_bias] -- VSS
+*
+* so the stage current (hence oscillation frequency) is set by the PTAT
+* bias:  f_osc ~ Iptat / (N * Cnode * Vswing)  =>  f proportional to T.
+*
+* NOTE: sky130 PDK devices are SUBCIRCUITS -> instantiate with X prefix.
+* W/L are bare micron numbers (PDK sets .option scale=1.0u).
+*
+* Pin order:  vdd vss gp_bias gn_bias fout
+* =====================================================================
+.subckt csro vdd vss gp_bias gn_bias fout
+.param nstage = 5
+.param cpar = 100f
+
+* --- stage current source/sink sizes (1:1 copies of the PTAT mirror,
+*     i.e. stage current ~= Iptat ~ 1 uA) ---
+.param wsrc = 3
+.param wsnk = 3
+.param lsrc = 4
+
+* --- node caps (model wiring/parasitic loading so it oscillates in sim) ---
+C0 n0 vss {cpar}
+C1 n1 vss {cpar}
+C2 n2 vss {cpar}
+C3 n3 vss {cpar}
+C4 n4 vss {cpar}
+
+* --- stage 0: in = n4, out = n0 ---
+XMP0s va0 gp_bias vdd vdd sky130_fd_pr__pfet_01v8 W={wsrc} L={lsrc}
+XMP0  n0 n4      va0 vdd sky130_fd_pr__pfet_01v8 W=2   L=0.15
+XMN0  n0 n4      vb0 vss sky130_fd_pr__nfet_01v8 W=1   L=0.15
+XMN0s vb0 gn_bias vss vss sky130_fd_pr__nfet_01v8 W={wsnk} L={lsrc}
+
+* --- stage 1: in = n0, out = n1 ---
+XMP1s va1 gp_bias vdd vdd sky130_fd_pr__pfet_01v8 W={wsrc} L={lsrc}
+XMP1  n1 n0      va1 vdd sky130_fd_pr__pfet_01v8 W=2   L=0.15
+XMN1  n1 n0      vb1 vss sky130_fd_pr__nfet_01v8 W=1   L=0.15
+XMN1s vb1 gn_bias vss vss sky130_fd_pr__nfet_01v8 W={wsnk} L={lsrc}
+
+* --- stage 2: in = n1, out = n2 ---
+XMP2s va2 gp_bias vdd vdd sky130_fd_pr__pfet_01v8 W={wsrc} L={lsrc}
+XMP2  n2 n1      va2 vdd sky130_fd_pr__pfet_01v8 W=2   L=0.15
+XMN2  n2 n1      vb2 vss sky130_fd_pr__nfet_01v8 W=1   L=0.15
+XMN2s vb2 gn_bias vss vss sky130_fd_pr__nfet_01v8 W={wsnk} L={lsrc}
+
+* --- stage 3: in = n2, out = n3 ---
+XMP3s va3 gp_bias vdd vdd sky130_fd_pr__pfet_01v8 W={wsrc} L={lsrc}
+XMP3  n3 n2      va3 vdd sky130_fd_pr__pfet_01v8 W=2   L=0.15
+XMN3  n3 n2      vb3 vss sky130_fd_pr__nfet_01v8 W=1   L=0.15
+XMN3s vb3 gn_bias vss vss sky130_fd_pr__nfet_01v8 W={wsnk} L={lsrc}
+
+* --- stage 4: in = n3, out = n4 (inverted feedback to stage 0) ---
+XMP4s va4 gp_bias vdd vdd sky130_fd_pr__pfet_01v8 W={wsrc} L={lsrc}
+XMP4  n4 n3      va4 vdd sky130_fd_pr__pfet_01v8 W=2   L=0.15
+XMN4  n4 n3      vb4 vss sky130_fd_pr__nfet_01v8 W=1   L=0.15
+XMN4s vb4 gn_bias vss vss sky130_fd_pr__nfet_01v8 W={wsnk} L={lsrc}
+
+* --- output buffer (two cascaded inverters, not current-starved) ---
+XB1 n4 n5 vdd vss inv
+XB2 n5 fout vdd vss inv
+.ends csro
+
+* --- helper: plain inverter subckt ---
+.subckt inv in out vdd vss
+XMPI out in vdd vdd sky130_fd_pr__pfet_01v8 W=3 L=0.15
+XMNI out in vss vss sky130_fd_pr__nfet_01v8 W=1.5 L=0.15
+.ends inv

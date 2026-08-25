@@ -1,0 +1,26 @@
+* =====================================================================
+* Analog front-end top: PTAT current source + current-starved ring
+* oscillator (temperature-to-frequency converter).
+*
+*   VDD -- PTAT (Iptat ~ VT ln N / R1) -- PMOS/NMOS bias mirrors -- CSRO
+*
+* fout is a square wave whose frequency is (approximately) linear in
+* absolute temperature.
+*
+* NOTE: sky130 PDK devices are SUBCIRCUITS -> instantiate with X prefix.
+*
+* Pin order:  vdd vss fout
+* =====================================================================
+.subckt t2f vdd vss fout
+
+* --- PTAT current source: Iptat flows directly into the NMOS diode
+*     (gn_bias), producing the low-side bias voltage for the CSRO ---
+XP vdd vss gn_bias gmir pa pb ptat
+
+* --- NMOS diode: gn_bias = Vgsn(Iptat); CSRO sinks mirror it 1:1 ---
+XMNBP gn_bias gn_bias vss vss sky130_fd_pr__nfet_01v8 W=3 L=4
+
+* --- CSRO: PMOS sources use gmir, NMOS sinks use gn_bias ---
+XO vdd vss gmir gn_bias fout csro
+
+.ends t2f

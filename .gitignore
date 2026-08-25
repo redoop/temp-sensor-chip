@@ -1,0 +1,5 @@
+# Build products / simulation outputs (regenerable)
+*.vcd
+*.out
+build/
+syn/out/temp_sensor_top_synth.v

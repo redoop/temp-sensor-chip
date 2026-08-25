@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>低温温度传感器芯片设计方案（量子计算场景） - XiangShanLab</title>
+<style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}:root{--navy:#0f0e1a;--accent:#6c63ff;--bg:#f8f9fc;--text:#1e1e2e;--text-secondary:#5a5a7a;--border:#e8e8f0;--code-bg:#f0f0f8}html{scroll-behavior:smooth;font-size:16px}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.8}.topbar{background:var(--navy);color:#fff;padding:0 1.5rem;height:52px;display:flex;align-items:center;gap:1rem;position:sticky;top:0;z-index:50}.topbar a{color:rgba(255,255,255,0.7);text-decoration:none;font-size:.85rem}.topbar a:hover{color:#fff}.topbar .brand{font-weight:700;font-size:.95rem;color:#fff}.topbar .sep{color:rgba(255,255,255,0.25)}.topbar .breadcrumb{font-size:.78rem;color:rgba(255,255,255,0.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.container{max-width:880px;margin:0 auto;padding:2rem 1.5rem 4rem}h1{font-size:2rem;font-weight:800;margin:.5rem 0 1rem;color:var(--navy)}h2{font-size:1.5rem;font-weight:700;margin:1.75rem 0 .75rem;padding-bottom:.4rem;border-bottom:2px solid var(--border);color:var(--navy)}h3{font-size:1.2rem;font-weight:600;margin:1.5rem 0 .5rem;color:var(--navy)}h4{font-size:1.05rem;font-weight:600;margin:1.25rem 0 .4rem}p{margin:.6rem 0}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}ul,ol{margin:.5rem 0 .5rem 1.5rem}li{margin:.3rem 0}strong{font-weight:700}em{font-style:italic}code{background:var(--code-bg);padding:.15rem .4rem;border-radius:4px;font-family:'SF Mono','Fira Code','Cascadia Code',Menlo,monospace;font-size:.85em}pre{background:#1e1e2e;color:#e0e0e0;padding:1rem 1.25rem;border-radius:10px;overflow-x:auto;margin:.75rem 0;font-size:.85rem;line-height:1.6}pre code{background:none;padding:0;color:inherit;font-size:inherit}blockquote{border-left:4px solid var(--accent);background:rgba(108,99,255,0.04);padding:.75rem 1rem;margin:.75rem 0;border-radius:0 8px 8px 0;color:var(--text-secondary)}table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.875rem}th,td{padding:.5rem .75rem;text-align:left;border:1px solid var(--border)}th{background:var(--navy);color:#fff;font-weight:600}img{max-width:100%;height:auto;border-radius:8px;margin:.75rem 0;border:1px solid var(--border)}hr{border:none;border-top:2px solid var(--border);margin:1.5rem 0}.footer{margin-top:2rem;padding:1rem 0;border-top:1px solid var(--border);font-size:.8rem;color:var(--text-secondary);text-align:center}.footer a{color:var(--accent);text-decoration:none}@media(max-width:600px){.container{padding:1.5rem 1rem 3rem}h1{font-size:1.5rem}.topbar{padding:0 .75rem;gap:.5rem}.topbar .breadcrumb{display:none}}</style>
+</head>
+<body>
+<div class="topbar">
+<a href="../../index.html" class="brand">XiangShanLab</a>
+<span class="sep">|</span>
+<a href="../../index.html">&#127968; 首页</a>
+<span class="sep">|</span>
+<span class="breadcrumb">temp-sensor-chip | docs</span>
+</div>
+<div class="container">
+<h1>低温温度传感器芯片设计方案（量子计算场景）</h1>
+<blockquote>
+<p>目标：将现有 TS130 温度传感器芯片（sky130A，-40~125 ℃）扩展至量子计算所需的<br>
+低温环境：<strong>77 K（液氮级）→ 4 K（液氦/超导量子处理器）→ 10~20 mK（稀释制冷机 MXC 层）</strong>。</p>
+</blockquote>
+<h2>1. 需求分析：量子计算中的温度层级</h2>
+<p>量子计算机是典型的&quot;温度分层&quot;系统，每一层都需要温度监测：</p>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>温度</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>室温电子学</td>
+<td>300 K</td>
+<td>控制/读出机箱、信号源</td>
+</tr>
+<tr>
+<td>一级冷板</td>
+<td>40~80 K（LN2 级）</td>
+<td>制冷机预冷、同轴/线缆过渡</td>
+</tr>
+<tr>
+<td>4K 冷板</td>
+<td>2~4 K</td>
+<td>超导腔、量子处理器封装、TWPA 放大器</td>
+</tr>
+<tr>
+<td>稀释制冷机 MXC</td>
+<td>10~20 mK</td>
+<td>超导量子比特运行层</td>
+</tr>
+</tbody>
+</table>
+<p>低温温度监测的典型需求：<strong>温度范围 4 K~300 K（芯片级）或 10 mK~300 K（外置温度计），<br>
+分辨率 10~100 mK，校准后精度 ±0.5 K（或 ±10 mK @ &lt;1 K）</strong>，同时要求极低功耗<br>
+（低温下自热会抬高测量点温度）与长时间热循环可靠性。</p>
+<h2>2. 为什么现有 -40 ℃ 方案不能直接下探（物理限制）</h2>
+<p>现有 TS130 采用 <strong>BJT（衬底 PNP）ΔVbe-PTAT + 电流饥饿环形振荡器</strong>，其物理与模型双重受限：</p>
+<ol>
+<li><strong>模型失效</strong>：sky130A 及绝大多数商用 PDK 的模型/角点只验证到 <strong>-40 ℃</strong>，<br>
+低于该温度的行为完全不在模型覆盖范围内（BSIM 4/6 的低温外推不可信）。</li>
+<li><strong>载流子冻析（carrier freeze-out）</strong>：硅中掺杂剂在 &lt;100 K 时不完全电离，<br>
+有效掺杂浓度骤降，BJT 的 β 崩溃、Vbe(T) 偏离指数律；ΔVbe 比例项失去 PTAT 线性。<br>
+这是<strong>物理极限</strong>：BJT-PTAT 架构即使重标定，可用下限也大约在 -60~-70 ℃（~200 K）量级，<br>
+<strong>4 K 下不可用</strong>。</li>
+</ol>
+<p><strong>关键结论</strong>：量子计算低温需求不能靠&quot;把现有架构调到更低温度&quot;实现，必须<strong>更换传感机理</strong>。<br>
+好消息是同一类硅 pn 结器件在低温下仍是单调的温度传感器——商用硅二极管温度计<br>
+（LakeShore DT-670 类）标定后可用至 <strong>1.4 K</strong>；代尔夫特理工等团队已在标准 CMOS 中<br>
+实现 <strong>4.2 K 工作的片上温度传感器</strong>（衬底 PNP + 数字多项式校准）。<br>
+核心思路是：<strong>低温下器件机理改变、但保持单调 → 用高精度标定（查找表/多项式）换准确性</strong>。</p>
+<h2>3. 传感机理选择（三种方案）</h2>
+<h3>方案 A：片上硅二极管/衬底 PNP 低温传感（4 K~300 K，cryo-CMOS 路线）</h3>
+<ul>
+<li><strong>原理</strong>：复用 sky130 衬底 PNP（或专用二极管），低温下不再用 ΔVbe，<br>
+而是直接测量 <strong>Vf(T)</strong>：4 K 时 Vf ≈ 1.1 V，300 K 时 ≈ 0.7 V，单调上升，<br>
+灵敏度约 1~2 mV/K，强非线性（存在特定低温&quot;kink&quot;，需选型/工艺规避）。</li>
+<li><strong>前端</strong>：恒流偏置（1/10 µA 两档，比例法消串联电阻）→ 高分辨率 ADC 或 V-f 转换。</li>
+<li><strong>数字</strong>：现有 <code>temp_engine</code> 分段线性校准直接复用，断点加密到 1 K 间隔<br>
+或升级为 3~9 阶多项式（切比雪夫拟合，参考商用二极管温度计做法）。</li>
+<li><strong>关键风险</strong>：sky130 模型在 &lt; -40 ℃ 无效 → 必须<strong>流片后 4 K 探针台实测标定</strong>；<br>
+或改用提供低温模型的工艺（见 §5）。</li>
+</ul>
+<h3>方案 B：片上 MOSFET 阈值电压/亚阈电流传感（4 K~300 K，cryo-CMOS 主流）</h3>
+<ul>
+<li><strong>原理</strong>：Vth(T) 在低温变化显著（300 K→4 K 阈值电压上移约 100~200 mV），<br>
+亚阈值电流的温度指数依赖强。恒流偏置 MOS 二极管测 Vgs，或测两偏置电流亚阈比。</li>
+<li>与方案 A 互补；部分 cryo-CMOS 文献认为 MOS 在 4 K 比 BJT 更易收敛、无 kink。</li>
+<li>同样需要低温标定；可作为 A 的冗余/自校准通道。</li>
+</ul>
+<h3>方案 C：外部低温温度计 + 片上电阻-数字转换器（RDC）（10 mK~300 K 全覆盖，最实用）</h3>
+<ul>
+<li><strong>原理</strong>：商用低温温度计本质是电阻元件：
+<ul>
+<li><strong>Cernox</strong>（LakeShore，10 mK~325 K，N 型半导体薄膜，灵敏度最高）</li>
+<li><strong>RuO₂ 厚膜</strong>（50 mK~300 K，低成本、抗辐照）</li>
+<li><strong>PT100/PT1000</strong>（30 K~500 K，金属 RTD，标准互换）</li>
+<li><strong>NTD-Ge</strong>（10 mK~100 K，中子嬗变掺杂锗）</li>
+</ul>
+</li>
+<li><strong>片上实现</strong>：高精度<strong>比例法电阻测量（ratiometric）</strong>：已知基准电阻 Rref 与被测<br>
+Rsen 串联同源激励，ΣΔ ADC 测电压比 → Rsen = Rref·(Vsen/Vref)；<strong>4 线开尔文</strong>连接<br>
+消除引线电阻与热电势影响。芯片可放室温（传感器远端），也可 cryo-CMOS 同置低温。</li>
+<li><strong>数字</strong>：电阻值 → 温度：每颗传感器出厂自带标定曲线（Cernox 典型 20~30 个标定点），<br>
+片上存系数、插值查表。</li>
+<li><strong>优点</strong>：覆盖 10 mK、工业标准、精度最高；<strong>缺点</strong>：外置传感头 + 引线。</li>
+</ul>
+<h3>推荐：混合架构</h3>
+<pre><code>        ┌────────────────────── 低温温度传感芯片 v2 ──────────────────────┐
+        │  模拟前端                                    数字核心            │
+        │ ┌────────────┐  ┌───────────┐   ┌──────────────────────────┐   │
+ 片上 ──▶│ 二极管/MOS    │  │  恒流源   │   │ ΣΔ/SAR ADC 或 V-f        │   │
+ 传感元   │ 低温传感元   │─▶│ +斩波     │──▶│  ┌────────────────────┐  │   │
+        │ (方案A/B)     │  │ 动态匹配  │   │  │ 多项式/查找表校准    │  │   │
+        └──────────────┘  └───────────┘   │  │  (复用 temp_engine)  │  │   │
+ 外置 ──▶│ 4线开尔文     │  ┌───────────┐  │  └────────┬───────────┘  │   │
+ Cernox  │ 输入+Rref     │──▶│ 比例ADC   │──▶│  I2C 从机 (复用)       │──▶ SDA
+ /RuO2   │ (方案C)       │  │ (ΣΔ)      │   └──────────────────────────┘   │
+        └──────────────┘  └───────────┘              os_int / 告警          │
+        └──────────────────────────────────────────────────────────────────┘
+</code></pre>
+<ul>
+<li><strong>片上通道</strong>（方案 A/B）：用于量子控制芯片/读出板的实时自监测（4 K~300 K）。</li>
+<li><strong>外置通道</strong>（方案 C）：用于制冷机各层级温度监测（10 mK~300 K）。</li>
+<li><strong>数字核心完全复用</strong>现有 TS130 的 I2C 从机、寄存器文件与分段校准引擎，<br>
+仅需扩展断点数量/多项式阶数与标定表存储。</li>
+</ul>
+<h2>4. 前端电路设计要点</h2>
+<h3>4.1 方案 A（片上二极管）前端</h3>
+<ul>
+<li>恒流偏置：1 µA / 10 µA 两档（低温下器件 kT/q 减小，需更高电流保证 Vf 可测），<br>
+用<strong>斩波 + 动态元件匹配</strong>抑制放大器失调（失调在低温漂移大）。</li>
+<li>测量：Vf 直接送入 ΣΔ ADC（16~20 bit，过采样抗干扰），或 V-f 转换后由<br>
+现有门控计数引擎处理（复用 TS130 的 T2F 数字通路，传感元换成二极管）。</li>
+<li>自热抑制：脉冲式测量（占空比 &lt;1%），测量期间功耗 &lt;1 mW。</li>
+</ul>
+<h3>4.2 方案 C（RDC）前端</h3>
+<ul>
+<li>4 线开尔文 + 比例法：I = Vref/Rref（Rref 用低温稳定金属薄膜电阻，<br>
+如 Vishay Z-foil，±0.2 ppm/K），Rsen = Rref·Vsen/Vref。</li>
+<li>ΣΔ ADC：斩波、16~24 bit；低热电势布线与连接。</li>
+<li>范围：Cernox 10 mK~300 K 对应电阻 ~1 kΩ~100 kΩ，需分段增益或大动态范围 ADC。</li>
+</ul>
+<h3>4.3 数字/校准</h3>
+<ul>
+<li>复用 <code>temp_engine</code>：断点从 9 个扩展至 100+（或 1 K 间隔 LUT），<br>
+或实现多项式拟合（3~9 阶，切比雪夫基，参考 LakeShore 做法）。</li>
+<li>寄存器：新增标定表读写（I2C 写系数），出厂标定或现场标定均可。</li>
+<li>输出：保持 LM75 风格寄存器，分辨率提升至 <strong>0.1 K / 0.01 K</strong>（低温需更高分辨率）。</li>
+</ul>
+<h2>5. 低温建模与验证（关键风险与对策）</h2>
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PDK 模型最低 -40 ℃，低温行为未知</td>
+<td>① 用已发表 cryo-CMOS 数据+低温参数集（文献中有 4 K BSIM 参数）做第一轮设计；② 流片后实测标定；③ 换工艺</td>
+</tr>
+<tr>
+<td>载流子冻析导致器件非线性/kink</td>
+<td>选低温特性平缓的器件结构；多电流比例法消除串联电阻；多项式标定</td>
+</tr>
+<tr>
+<td>自热效应（低温热容极小）</td>
+<td>低占空比脉冲测量、µA 级功耗设计</td>
+</tr>
+<tr>
+<td>热循环应力/封装失效</td>
+<td>低温封装评估（热膨胀匹配）、热循环筛选测试</td>
+</tr>
+<tr>
+<td>引线电阻/热电势误差（外置方案）</td>
+<td>4 线开尔文连接、低热电势材料</td>
+</tr>
+<tr>
+<td>工艺可得性</td>
+<td>sky130 无低温模型 → 评估 IHP SG13（有低温研究）、GF 28nm/TSMC 40nm（社区/论文有 4 K 模型数据）</td>
+</tr>
+</tbody>
+</table>
+<h3>验证设施</h3>
+<ul>
+<li><strong>77 K 快速验证</strong>：液氮杜瓦浸泡（现有芯片即可先做实验，验证低温下器件行为）。</li>
+<li><strong>4 K 标定</strong>：闭循环制冷机 / 低温探针台（cryo-probe-station），全温扫描建立查找表。</li>
+<li><strong>10~20 mK 验证</strong>：稀释制冷机（配合量子比特实验室，标定外置 Cernox 通道）。</li>
+</ul>
+<h2>6. 分阶段实施路线</h2>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>内容</th>
+<th>可达目标</th>
+<th>风险</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Phase 1</strong></td>
+<td>方案 C：RDC 芯片（片上在室温工作，读外部低温温度计）</td>
+<td>10 mK~300 K，精度 ±10 mK（&lt;1 K）</td>
+<td>低：全部电路在 PDK 有效范围内</td>
+</tr>
+<tr>
+<td><strong>Phase 2</strong></td>
+<td>方案 A/B：片上低温传感元 + 流片 + 4 K 探针台标定</td>
+<td>4 K~300 K 片上监测，±0.5 K</td>
+<td>中：模型失效需实测迭代</td>
+</tr>
+<tr>
+<td><strong>Phase 3</strong></td>
+<td>全集成 cryo-CMOS 温度传感 + 读出 + 量子控制芯片集成</td>
+<td>与量子芯片同封、片上多点测温</td>
+<td>高：需低温工艺/模型支持</td>
+</tr>
+</tbody>
+</table>
+<p><strong>建议路径</strong>：先做 Phase 1（RDC 读外置 Cernox——量子计算温度监测的标准做法，落地最快、<br>
+风险最低，且与现有 TS130 数字核几乎完全复用），同时用 Phase 2 积累片上低温器件实测数据。</p>
+<h2>7. 参考资料</h2>
+<ul>
+<li>TU Delft cryo-CMOS 智能温度传感器（4.2 K 工作、衬底 PNP + 数字校准）：<br>
+<a href="https://ieeexplore.ieee.org/document/9882600">Integrated Cryo-CMOS Temperature Sensors for Quantum Control ICs (IEEE)</a>，<br>
+<a href="https://research.tudelft.nl/en/publications/integrated-cryo-cmos-temperature-sensors-for-quantum-control-ics/">TU Delft 出版物</a></li>
+<li>CMOS 温度传感器综述（室温至低温应用）：<br>
+<a href="https://service.jices.cn/EN/10.20193/j.ices2097-4191.2025.0121">A review of CMOS temperature sensors: from room temperature to cryogenic applications</a></li>
+<li>硅二极管低温温度计（kink 与无 kink 设计）：<br>
+<a href="https://www.sciencedirect.com/science/article/abs/pii/S0924424798003616">Silicon diode temperature sensor without a kink of the response curve in cryogenic region</a></li>
+<li>二极管温度计经典文献：<br>
+<a href="https://www.sciencedirect.com/science/article/abs/pii/0038110172901499">On diode thermometers</a></li>
+</ul>
+
+</div>
+<div class="footer">
+<a href="https://github.com/OpenXiangShan/XiangShanLab">XiangShanLab</a> · 开芯院 · CC BY-NC 4.0
+</div>
+</body>
+</html>

@@ -1,0 +1,39 @@
+* =====================================================================
+* PTAT current source (Banba OTA-forced) -- SkyWater 130nm, 1.8 V
+*
+* The OTA forces V(a) = V(b) so the current is set exactly by
+*   I = (Vbe2 - Vbe1)/R1 = VT*ln(N)/R1   (N ~= 10 via two different PNP
+* sizes: W3p40L3p40 vs W0p68L0p68).  Independent of mirror strength --
+* robust down to low temperatures.
+*
+* Startup: with `uic` all nodes start at 0 -> gmir=0 -> mirror ON ->
+* the loop locks itself; a current pulse kick is added as insurance.
+*
+* Pin order:  vdd vss iout gmir a b
+* =====================================================================
+.subckt ptat vdd vss iout gmir a b
+.param r1_val = 100k
+
+* --- emitter-area-ratioed substrate PNPs (C B E; B,C to vss) ---
+XQ1 vss vss n1  sky130_fd_pr__pnp_05v5_W3p40L3p40
+XQ2 vss vss b   sky130_fd_pr__pnp_05v5_W0p68L0p68
+
+* --- branch mirrors (1:1:1), gate = gmir (OTA output) ---
+XMP1 a gmir vdd vdd sky130_fd_pr__pfet_01v8 W=3 L=4
+XMP2 b gmir vdd vdd sky130_fd_pr__pfet_01v8 W=3 L=4
+XMP3 iout gmir vdd vdd sky130_fd_pr__pfet_01v8 W=3 L=4
+
+* --- delta-Vbe resistor in series with Q1's emitter ---
+R1 a n1 {r1_val}
+
+* --- OTA: PMOS input pair, NMOS mirror load, ideal tail ---
+* in+ = a, in- = b, out = gmir
+ITAIL vdd t 5u
+XMPD1 d1 a t vdd sky130_fd_pr__pfet_01v8 W=6 L=0.5
+XMPD2 gmir b t vdd sky130_fd_pr__pfet_01v8 W=6 L=0.5
+XMND1 d1 d1 vss vss sky130_fd_pr__nfet_01v8 W=3 L=0.5
+XMND2 gmir d1 vss vss sky130_fd_pr__nfet_01v8 W=3 L=0.5
+
+* --- startup kick: 1 uA into gmir for 1 us, then off ---
+IKICK gmir vss PULSE(0 1u 0 10n 10n 1u 10u)
+.ends ptat
