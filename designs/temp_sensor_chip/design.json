@@ -8,7 +8,9 @@
     "rtl/temp_regs.v",
     "rtl/i2c_slave.v"
   ],
-  "include_dirs": [],
+  "include_dirs": [
+    "tests/include"
+  ],
   "defines": {},
   "parameters": {
     "IO_WIDTH": 66,
@@ -24,7 +26,9 @@
       "kind": "unit",
       "top": "TempSensorTopDut",
       "sources": [
-        "tests/TempSensorTopTb.sv"
+        "tests/TempSensorTopTb.sv",
+        "tests/t2f_model.v",
+        "tests/i2c_master_model.v"
       ]
     },
     {
@@ -32,7 +36,9 @@
       "kind": "frame",
       "top": "FrameTempSensorTopTb",
       "sources": [
-        "tests/FrameTempSensorTopTb.sv"
+        "tests/FrameTempSensorTopTb.sv",
+        "tests/t2f_model.v",
+        "tests/i2c_master_model.v"
       ]
     }
   ]

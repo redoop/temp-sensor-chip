@@ -19,6 +19,10 @@ module i2c_slave #(
     input  wire       rstn,
     inout  wire       scl,
     inout  wire       sda,
+    // Open-drain SDA pull-down indicator, exported so an integration
+    // wrapper can reflect it onto a shared bidirectional pad
+    // (io_oe[n] = sda_oe).  Unused when sda is wired directly to a pad.
+    output wire       sda_oe,
     output reg  [3:0] reg_addr,
     output reg  [7:0] reg_wdata,
     output reg        reg_we,     // write strobe (1 clk pulse)
@@ -137,6 +141,11 @@ module i2c_slave #(
                             byte_pending <= 1'b0;
                             state        <= ST_ACK;
                             data_phase   <= 1'b0;
+                            // Latch address-match here so the ACK phase can
+                            // drive SDA low for our own address.  Without
+                            // this the slave NACKs every address, including
+                            // its own.
+                            addr_ok      <= (rx_shift[7:1] == I2C_ADDR);
                         end
                     end
 
@@ -236,33 +245,35 @@ module i2c_slave #(
 
     // -----------------------------------------------------------------
     // SDA output (open-drain): '0' bit pulls low (oe=1), '1' releases.
+    // sda_oe is also exported on the port list above.
     // -----------------------------------------------------------------
-    reg sda_oe;
+    reg sda_oe_r;
     always @(posedge clk or negedge rstn) begin
         if (!rstn) begin
-            sda_oe <= 1'b0;
+            sda_oe_r <= 1'b0;
         end else begin
             case (state)
                 ST_ACK: begin
                     // pull low for ACK during the ACK clock; a non-matching
                     // address is NOT acknowledged (NACK = release)
-                    if (scl_lo)        sda_oe <= data_phase ? 1'b1 : addr_ok;
-                    else if (scl_fall) sda_oe <= 1'b0;
+                    if (scl_lo)        sda_oe_r <= data_phase ? 1'b1 : addr_ok;
+                    else if (scl_fall) sda_oe_r <= 1'b0;
                 end
                 ST_RBYTE: begin
                     // drive current TX bit while SCL is low
                     if (scl_lo) begin
-                        sda_oe <= ~reg_rdata[tx_idx];
-                    end else if (scl_fall) sda_oe <= 1'b0;
+                        sda_oe_r <= ~reg_rdata[tx_idx];
+                    end else if (scl_fall) sda_oe_r <= 1'b0;
                 end
                 ST_ACKR: begin
-                    sda_oe <= 1'b0;   // master drives ACK; slave released
+                    sda_oe_r <= 1'b0;   // master drives ACK; slave released
                 end
-                default: sda_oe <= 1'b0;
+                default: sda_oe_r <= 1'b0;
             endcase
         end
     end
 
-    assign sda = sda_oe ? 1'b0 : 1'bz;
+    assign sda_oe = sda_oe_r;
+    assign sda    = sda_oe_r ? 1'b0 : 1'bz;
 
 endmodule
