@@ -1,0 +1,39 @@
+{
+  "name": "temp_sensor_chip",
+  "module": "TempSensorTop",
+  "sources": [
+    "rtl/TempSensorTop.sv",
+    "rtl/frame_bridge.sv",
+    "rtl/temp_engine.v",
+    "rtl/temp_regs.v",
+    "rtl/i2c_slave.v"
+  ],
+  "include_dirs": [],
+  "defines": {},
+  "parameters": {
+    "IO_WIDTH": 66,
+    "NSEC": 10,
+    "BP_CNT": "288'h1ddd1c7b1b571a421910185517e516a5155813ce",
+    "BP_T": "160'h00fa00c800a000780050003600280000ffd8ffb0",
+    "GAIN": "108'h02402302502102402002001f01a",
+    "SHIFT": 8
+  },
+  "tests": [
+    {
+      "name": "io",
+      "kind": "unit",
+      "top": "TempSensorTopDut",
+      "sources": [
+        "tests/TempSensorTopTb.sv"
+      ]
+    },
+    {
+      "name": "frame",
+      "kind": "frame",
+      "top": "FrameTempSensorTopTb",
+      "sources": [
+        "tests/FrameTempSensorTopTb.sv"
+      ]
+    }
+  ]
+}
