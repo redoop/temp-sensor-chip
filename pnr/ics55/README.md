@@ -58,7 +58,8 @@ All steps report success except `lec` (see the defect below).
 | `def/temp_sensor_top_pnr_route.def.gz` | routed DEF (gzipped) |
 | `netlist/temp_sensor_block_route.v.gz` | post-route gate netlist |
 | `netlist/temp_sensor_block_Synthesis.v.gz` | post-synthesis gate netlist |
-| `harden/temp_sensor_block_Harden.gds` | final GDSII |
+| `harden/temp_sensor_block_route_layout.gds` | **full layout GDSII** (1.76 MB, 1214 structures, 79 standard-cell masters) |
+| `harden/temp_sensor_block_Harden.gds` | *abstract* macro view only (5 structures: DIEAREA + pins + obstructions) |
 | `harden/temp_sensor_block_Harden.lef` | abstract LEF for chip-level integration |
 | `harden/temp_sensor_block_Harden.lib` | timing LIB |
 | `harden/temp_sensor_block_Harden.png` | layout snapshot |
@@ -70,6 +71,53 @@ All steps report success except `lec` (see the defect below).
 
 The design is named `temp_sensor_top_pnr` because that was the ECC project
 name; the module is `temp_sensor_block`.
+
+## Scope: this is the digital block only
+
+**Neither the netlist nor the layout contains any analog circuit.** Verified
+on the artefacts:
+
+* Netlist: every instance is an ICS55 standard cell (names ending `H7R` /
+  `H7L`, i.e. the H7CR / H7CL libraries). No PNP, resistor, capacitor or
+  other analog device appears.
+* Layout GDS: 1214 structures = 79 `Master_<stdcell>` definitions plus the
+  top-level routing; **0 non-standard-cell masters**.
+
+The analog front-end enters this block as a plain digital input. The port
+list makes the boundary explicit:
+
+```
+input  clk, rstn, t2f_in, scl_i, sda_i
+output sda_o, sda_oe, os_int_o, os_int_oe
+```
+
+`t2f_in` **is** the divide. Everything left of it — the PTAT current source,
+the current-starved ring oscillator, and the level/drive conditioning of the
+resulting square wave — is analog and lives outside this netlist:
+
+| Analog asset | Form | In the netlist? |
+| --- | --- | --- |
+| `analog/spice/ptat.spice` | SPICE schematic (Banba OTA PTAT) | no |
+| `analog/spice/csro.spice` | SPICE schematic (5-stage CSRO) | no |
+| `analog/spice/t2f.spice` | SPICE top (PTAT + CSRO) | no |
+| `analog/sim/*.csv`, `*.png` | ngspice characterization (f(T), Iptat) | no |
+| `layout/ptat_cell.mag/.gds` | magic layout of the PTAT cell only | no — separate GDS |
+| `tests/t2f_model.v` | behavioral T2F model (digital sim only) | no |
+
+Consequences worth being explicit about:
+
+* There is **no single merged full-chip netlist** in this repo, and this
+  step does not create one. A full-chip netlist would be a chip-level
+  assembly (pad ring + analog block + this hardened macro), which does not
+  exist yet.
+* The analog side is far from tapeout in its own right: the PTAT cell has
+  a layout with 8 spacing DRC violations, and **the CSRO has no layout at
+  all**. The SPICE netlists are schematics, not layout.
+* `t2f_in` is treated as a digital signal. The real CSRO output is a
+  ~0.5–0.8 MHz, 1.8 V square wave; any chip-level integration must
+  guarantee adequate swing, slope and noise margin at this pin, and the
+  2-flop synchronizer in `i2c_slave.v` / the engine's edge detector are the
+  only conditioning on the digital side.
 
 ## Reproducing
 
