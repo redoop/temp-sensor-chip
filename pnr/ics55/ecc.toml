@@ -1,0 +1,14 @@
+[design]
+name = "temp_sensor_top_pnr"
+top = "temp_sensor_block"
+rtl = ["rtl/temp_sensor_block.v", "rtl/i2c_slave.v", "rtl/temp_engine.v", "rtl/temp_regs.v"]
+clock_port = "clk"
+frequency_mhz = 10.0
+
+[pdk]
+name = "ics55"
+root = ""
+
+[flow]
+# preset: rtl2gds | syn_sta | synthesis_lec
+preset = "rtl2gds"
