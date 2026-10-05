@@ -1,0 +1,70 @@
+* =====================================================================
+* t2f_afe.spice -- analog front-end macro, chip-level wrapper
+*
+* Wraps the PTAT current source and the current-starved ring oscillator
+* behind the four-pin interface that chip_top.v expects:
+*
+*     t2f_afe  vdda  vssa  en  fout
+*
+* so that the analog schematic and the structural chip netlist agree on
+* pin names and order.  This file is the "real content" of the u_afe
+* instance in ../../rtl/t2f_afe.v (whose Verilog is only a behavioural
+* view for digital simulation).
+*
+* ---------------------------------------------------------------------
+* PROCESS: SkyWater sky130A
+* ---------------------------------------------------------------------
+* The devices below are sky130 primitives (sky130_fd_pr__pfet_01v8,
+* ...__nfet_01v8, ...__pnp_05v5_*).  The digital macro that this chip
+* netlist instantiates as u_dig was hardened on ICsprout 55 nm.  A single
+* chip cannot have analog in sky130 and digital in ICS55: this is the
+* headline blocking issue for the merged chip, see ../../README.md.
+*
+* ---------------------------------------------------------------------
+* Enable / power-down
+* ---------------------------------------------------------------------
+* The original ptat.spice and csro.spice have no enable pin.  Rather than
+* leave `en` unconnected, a PMOS header switch on the PTAT/mirror supply
+* is added here, driven by an inverter that is powered from the always-on
+* vdda rail.  This is a real (if simple) power-down: it removes the bias
+* current, which also stops the oscillator.
+*
+* Caveat: with the header switch open the CSRO output node floats.  If
+* the digital input buffer is powered, that floating node can sit at mid
+* rail and burn crowbar current in u_inbuf's first stage.  In the merged
+* chip, `en` should therefore only be deasserted together with the
+* digital domain, or a weak pull-down must be added on fout.  Tracked as
+* an open item.
+*
+* ---------------------------------------------------------------------
+* What is still missing for a real macro
+* ---------------------------------------------------------------------
+*   * layout for the CSRO -- only the PTAT cell has any layout at all
+*     (layout/ptat_cell.mag), and it has 8 spacing DRC violations
+*   * LVS: this schematic has never been compared against layout
+*   * extracted (PEX) re-simulation of the corners
+*   * the calibration table currently in use was fitted from schematic
+*     simulation, not from layout
+* =====================================================================
+
+.include "ptat.spice"
+.include "csro.spice"
+.include "t2f.spice"
+
+.subckt t2f_afe vdda vssa en fout
+
+* --- header switch: en=1 -> vdd_core follows vdda ---------------------
+.param wsw  = 8
+.param lsw  = 0.5
+XSW vdd_core en_b vdda vdda sky130_fd_pr__pfet_01v8 W={wsw} L={lsw}
+
+* --- enable inverter, powered from the always-on vdda rail ------------
+* en = 1 -> en_b = 0 -> switch on
+* en = 0 -> en_b = vdda -> switch off
+XMI en_b en vssa vssa sky130_fd_pr__nfet_01v8 W=1   L=0.15
+XMP en_b en vdda vdda sky130_fd_pr__pfet_01v8 W=2   L=0.15
+
+* --- core: PTAT + CSRO ------------------------------------------------
+XU vdd_core vssa fout t2f
+
+.ends t2f_afe
